@@ -2,6 +2,10 @@ import json
 import logging
 import colorlog
 import yaml
+from selenium import webdriver
+from selenium.webdriver.edge.service import Service
+from selenium.webdriver.edge.options import Options
+import time
 
 
 def setup_logging():
@@ -12,7 +16,7 @@ def setup_logging():
     """
     handler = colorlog.StreamHandler()
     handler.setFormatter(colorlog.ColoredFormatter(
-        '%(log_color)s%(asctime)s - %(levelname)s - %(message)s',
+        '%(log_color)s%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s',
         log_colors={
             'DEBUG': 'cyan',
             'INFO': 'green',
@@ -30,8 +34,9 @@ def setup_logging():
 def load_cookies():
     """
     Try to load cookies from the 'cookies.json' file.
+    If the file is not found, open the login page, get cookies and save them.
 
-    :return: Loaded cookies as a dictionary or None if the file is not found.
+    :return: Loaded cookies as a dictionary or None if an error occurs.
     """
     try:
         logging.info("Attempt to load cookies from cookies.json...")
@@ -40,12 +45,13 @@ def load_cookies():
             return json.load(f)
     except FileNotFoundError:
         logging.info("cookies.json not found, no saved cookies.")
-        return None
+        cookies = open_login_page_and_get_cookies()
+        return cookies
 
 
 def save_cookies(cookies):
     """
-    Save cookies to the 'cookies.json' file.
+    Save cookies to the '_cookies.json' file.
 
     :param cookies: Cookies to be saved, in dictionary format.
     """
@@ -74,5 +80,38 @@ def load_headers():
         logging.error("deepseek_headers.yml not found.")
         return None
 
+
+def open_login_page_and_get_cookies():
+    """
+    Open the login page in Edge browser, wait for user to log in, and then get and save cookies.
+    """
+    try:
+        with open('edge_driver.txt', 'r') as f:
+            edge_driver_path = f.read().strip()
+    except FileNotFoundError:
+        logging.error("edge_driver.txt not found. Please check the file exists and contains the correct path.")
+        return None
+
+    edge_options = Options()
+    service = Service(edge_driver_path)
+    driver = webdriver.Edge(service=service, options=edge_options)
+
+    try:
+        driver.get('https://chat.deepseek.com/')
+        logging.info("Opening the login page in Edge browser. Please log in manually.")
+        input("Press Enter after you have logged in...")
+        # Get the cookies
+        cookies = driver.get_cookies()
+        # Close the browser
+        driver.quit()
+        logging.info("Browser closed.")
+        # Save the cookies
+        save_cookies(cookies)
+        return cookies
+    except Exception as e:
+        logging.error(f"An error occurred while getting cookies: {e}")
+        return None
+    finally:
+        driver.quit()
 
 logger = setup_logging()
